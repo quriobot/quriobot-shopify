@@ -7,7 +7,6 @@ import Koa from "koa";
 import Router from "koa-router";
 import next from "next";
 import Shop from "../models/shop.model";
-import User from "../models/user.model";
 import {
 	deleteCallback,
 	loadCallback,
