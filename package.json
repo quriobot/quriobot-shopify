@@ -1,5 +1,5 @@
 {
-  "name": "shopify-app-node",
+  "name": "quriobot-shopify-app",
   "version": "1.0.0",
   "description": "Shopify's node app for CLI tool",
   "scripts": {
