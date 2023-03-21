@@ -2,21 +2,16 @@
 
 {% assign quriobot_paths = settings.value.quriobot_path | strip | newline_to_br | strip_newlines | split: "<br />" %}
 
+{{ quriobot_paths | json }}
+
 {% assign quriobot_init = settings.value.quriobot_init %}
 
-<script type="text/javascript">
-  if (!Array.isArray(window.qbOptions)) {
-    window.qbOptions = []
-  }
-  window.qbOptions.push({ "baseUrl": "https://botsrv2.com", "use": "{{ quriobot_paths.first }}" });
-</script>
-<script
-  type="text/javascript"
-  src="https://static.botsrv2.com/website/js/widget2.acbb0839.min.js"
-  integrity="sha384-ZMtHIFwte+yyRQtC29dGm3j232b6y6qTIkkYgIfhJQeaKqDk9OQsiSKPBMhdFp2P"
-  crossorigin="anonymous" defer
-  data-no-minify="1">
-</script>
+{% assign embed_codes = settings.value.embed_codes %}
+
+{{ embed_codes | json }}
+
+{{ embed_codes.first }}
+
 <script type="text/javascript">
   {% if quriobot_init.size %}
     {{ quriobot_init }}
