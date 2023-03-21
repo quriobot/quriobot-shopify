@@ -15,6 +15,8 @@ import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 import * as Yup from "yup";
 
+React.useLayoutEffect = React.useEffect 
+
 const Index = () => {
 	const app = useAppBridge();
 	const router = useRouter();
@@ -60,6 +62,25 @@ const Index = () => {
 			setIsLoading(false);
 		}
 	};
+
+	const handleReloadCode = async () => {
+		let sessionToken = await getSessionToken(app);
+		setIsLoading(true);
+		let body = {
+			shop
+		}
+		try {
+			let data = await axios.post("/api/reload_embed_code", body, {
+				headers: {
+					Authorization: `Bearer ${sessionToken}`,
+				},
+			});
+			if (data) setIsActiveSuccess(true);
+			setIsLoading(false);
+		} catch (error) {
+			setIsLoading(false);
+		}
+	}
 
 	const getSetting = async () => {
 		let sessionToken = await getSessionToken(app);
@@ -113,6 +134,13 @@ const Index = () => {
 					onAction: handleSubmit,
 					loading: isLoading,
 				}}
+				secondaryActions={[
+					{
+						content: "Reload embed code",
+						onAction: handleReloadCode,
+						loading: isLoading
+					}
+				]}
 			>
 				<Layout>
 					<Layout.Section>

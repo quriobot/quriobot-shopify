@@ -6,7 +6,6 @@ import "isomorphic-fetch";
 import Koa from "koa";
 import Router from "koa-router";
 import next from "next";
-import Shop from "../models/shop.model";
 import {
 	deleteCallback,
 	loadCallback,
@@ -14,25 +13,14 @@ import {
 } from "../utilities/redis-store";
 
 const _ = require("lodash");
-const mongoose = require("mongoose");
 const bodyParser = require("koa-bodyparser");
-const cors = require("@koa/cors");
-const fs = require("fs");
 const axios = require("axios");
+
 dotenv.config();
 
-mongoose
-	.connect(process.env.MONGODB_URL, {
-		useCreateIndex: true,
-		useNewUrlParser: true,
-		useUnifiedTopology: true,
-		useFindAndModify: false,
-	})
-	.then(() => {
-		if (process.env.NODE_ENV !== "test") {
-			console.log("Connected to %s", "mongodb://127.0.0.1:27017/quriobot");
-		}
-	});
+const knexConfig = require("../knexfile");
+
+const knex = require('knex')(knexConfig[process.env.NODE_ENV])
 
 const path = require("path");
 const serve = require("koa-static");
@@ -117,9 +105,14 @@ app.prepare().then(async () => {
 		ctx.res.statusCode = 200;
 	};
 
+	const getShopData = async (shop) => {
+		const shopData = await knex("shops").first("shop", "token").where({shop});
+		return shopData;
+	}
+
 	const verifyIfActiveShopifyShop = async (ctx, next) => {
 		const shop = ctx?.query?.shop || process.env.SHOP;
-		const shopData = await Shop.findOne({ shop });
+		const shopData = await getShopData(shop);
 
 		// This shop hasn't been seen yet, go through OAuth to create a session
 		if (!shopData) {
@@ -219,8 +212,8 @@ app.prepare().then(async () => {
 
 	router.post("/api/get-setting", bodyParser(), async (ctx) => {
 		let { shop } = ctx.request.body;
-			let shopData = await Shop.findOne({ shop });
-			const ownerId = await getCurrentAppInstallation(shop, shopData.token);
+		let shopData = await getShopData(shop);
+		const ownerId = await getCurrentAppInstallation(shop, shopData.token);
 		try {
 			const { data } = await axios({
 				method: "post",
@@ -248,55 +241,121 @@ app.prepare().then(async () => {
 		}
 	});
 
-	// verifyRequest({ accessMode: "offline" }), bodyParser()
-	router.post(
-		"/api/save_change",
-		verifyRequest({ accessMode: "offline" }),
-		bodyParser(),
-		async (ctx) => {
-			let { shop, config } = ctx.request.body;
-			let shops = await Shop.findOne({ shop });
+	const saveConfig = async (shopData, config) => {
+		return axios({
+			method: "post",
+			url: `https://${shopData.shop}/admin/api/${API_VERSION}/graphql.json`,
+			headers: {
+				"X-Shopify-Access-Token": shopData.token,
+				"Content-Type": "application/json",
+			},
+			data: {
+				query:
+					"mutation CreateAppDataMetafield($metafieldsSetInput: [MetafieldsSetInput!]!) {\n  metafieldsSet(metafields: $metafieldsSetInput) {\n    metafields {\n      id\n      namespace\n      key\n    }\n    userErrors {\n      field\n      message\n    }\n  }\n}",
+				variables: {
+					metafieldsSetInput: [
+						{
+							namespace: "app_settings",
+							key: "general_setting",
+							type: "json",
+							value: JSON.stringify(config),
+							ownerId: ownerId,
+						},
+					],
+				},
+			},
+		});
+	}
 
-			try {
-				const ownerId = await getCurrentAppInstallation(shop, shops.token);
-				if (ownerId) {
-					await axios({
-						method: "post",
-						url: `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
-						headers: {
-							"X-Shopify-Access-Token": shops.token,
-							"Content-Type": "application/json",
-						},
-						data: {
-							query:
-								"mutation CreateAppDataMetafield($metafieldsSetInput: [MetafieldsSetInput!]!) {\n  metafieldsSet(metafields: $metafieldsSetInput) {\n    metafields {\n      id\n      namespace\n      key\n    }\n    userErrors {\n      field\n      message\n    }\n  }\n}",
-							variables: {
-								metafieldsSetInput: [
-									{
-										namespace: "app_settings",
-										key: "general_setting",
-										type: "json",
-										value: JSON.stringify(config),
-										ownerId: ownerId,
-									},
-								],
-							},
-						},
-					});
-					ctx.status = 200;
-					ctx.body = {
-						success: true,
-					};
-				}
-			} catch (error) {
-				ctx.status = 400;
+	router.post("/api/reload_embed_code", verifyRequest({ accessMode: "offline" }), bodyParser(), async (ctx) => {
+		let { shop } = ctx.request.body;
+		try {
+			const shopData = await getShopData(shop);
+			const ownerId = await getCurrentAppInstallation(shop, shopData.token);
+			const { data } = await axios({
+				method: "post",
+				url: `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+				headers: {
+					"X-Shopify-Access-Token": shopData.token,
+					"Content-Type": "application/json",
+				},
+				data: {
+					query: `query {\n    appInstallation(id: ${JSON.stringify(ownerId)}) {\n        metafield(namespace: "app_settings", key: "general_setting") {\n            value\n        }\n    }\n}`,
+					variables: {},
+				},
+			});
+			let config = data?.data?.appInstallation?.metafield?.value
+				? JSON.parse(data?.data?.appInstallation?.metafield?.value)
+				: "";
+			if (!config) {
+				ctx.status = 200;
 				ctx.body = {
 					success: false,
-					error: error,
+				};
+				return
+			}
+			let { quriobot_path } = config;
+			quriobot_path = quriobot_path.split("\n");
+			let embed_codes = await Promise.all(quriobot_path.map(async (path) => {
+				let response = await axios.get(`https://api.botsrv2.com/0.0.1/frontend/bots/${path}`, {
+					headers: {
+						"X-For-Embed-Code": true
+					}
+				});
+				return response.data.frontend.embed_code_2;
+			}));
+			config = {
+				...config,
+				embed_codes
+			}
+			await saveConfig(shopData, config);
+			ctx.status = 200;
+			ctx.body = {
+				success: true,
+			};
+		} catch (error) {
+			ctx.status = 200;
+			ctx.body = {
+				success: false,
+			};
+		}
+	});
+
+	router.post("/api/save_change", verifyRequest({ accessMode: "offline" }), bodyParser(), async (ctx) => {
+		let { shop, config } = ctx.request.body;
+		let shopData = await getShopData(shop);
+
+		try {
+			const ownerId = await getCurrentAppInstallation(shop, shopData.token);
+			if (ownerId) {
+				let { quriobot_path } = config;
+				quriobot_path = quriobot_path.split("\n");
+				let embed_codes = await Promise.all(quriobot_path.map(async (path) => {
+					let response = await axios.get(`https://${process.env.QURIBOT_FRONTEND_API}/${path}`, {
+						headers: {
+							"X-For-Embed-Code": true
+						}
+					});
+					return response.data.frontend.embed_code_2;
+				}));
+				config = {
+					...config,
+					embed_codes
+				}
+				await saveConfig(shopData, config);
+				ctx.status = 200;
+				ctx.body = {
+					success: true,
 				};
 			}
+		} catch (error) {
+			ctx.status = 400;
+			ctx.body = {
+				success: false,
+				error: error,
+			};
 		}
-	);
+	});
 
 	router.get("(/_next/static/.*)", handleRequest); // Static content is clear
 	router.get("/_next/webpack-hmr", handleRequest); // Webpack content is clear
