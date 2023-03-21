@@ -22,6 +22,11 @@ const knexConfig = require("../knexfile");
 
 const knex = require('knex')(knexConfig[process.env.NODE_ENV])
 
+const getShopData = async (shop) => {
+	const shopData = await knex("shops").first("shop", "token").where({shop});
+	return shopData;
+}
+
 const path = require("path");
 const serve = require("koa-static");
 const port = parseInt(process.env.PORT, 10) || 8081;
@@ -73,14 +78,13 @@ app.prepare().then(async () => {
 				const host = ctx.query.host;
 				ACTIVE_SHOPIFY_SHOPS[shop] = scope;
 
-				await Shop.findOneAndUpdate(
-					{ shop: shop },
-					{
-						shop: shop,
-						token: accessToken,
-					},
-					{ upsert: true, new: true, setDefaultsOnInsert: true }
-				);
+				const shopData = await getShopData(shop);
+
+				if (shopData) {
+					await knex("shops").where({shop}).update({token: accessToken});
+				} else {
+					await knex("shops").insert({shop: shop, token: accessToken })
+				}
 
 				// Redirect to app with shop parameter upon auth
 				ctx.redirect(`/?shop=${shop}&host=${host}`);
@@ -104,11 +108,6 @@ app.prepare().then(async () => {
 		ctx.respond = false;
 		ctx.res.statusCode = 200;
 	};
-
-	const getShopData = async (shop) => {
-		const shopData = await knex("shops").first("shop", "token").where({shop});
-		return shopData;
-	}
 
 	const verifyIfActiveShopifyShop = async (ctx, next) => {
 		const shop = ctx?.query?.shop || process.env.SHOP;
