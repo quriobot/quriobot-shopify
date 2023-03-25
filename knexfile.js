@@ -11,7 +11,6 @@ module.exports = {
       user : process.env.MYSQL_USERNAME,
       password : process.env.MYSQL_PASSWORD,
       database : process.env.MYSQL_DATABASE,
-      socketPath: '/var/run/mysqld/mysqld.sock'
     }
   },
   staging: {
@@ -20,11 +19,15 @@ module.exports = {
   production: {
     client: 'mysql',
     connection: {
-      host : process.env.MYSQL_HOST,
+      host : "db",
       port : process.env.MYSQL_PORT,
       user : process.env.MYSQL_USERNAME,
       password : process.env.MYSQL_PASSWORD,
       database : process.env.MYSQL_DATABASE,
+    },
+    migrations: {
+      tableName: "knex_migrations",
+      directory: "./migrations"
     }
   }
 };

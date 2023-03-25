@@ -54,14 +54,6 @@ Shopify.Context.initialize({
 	),
 });
 
-// Storing the currently active shops in memory will force them to re-login when your server restarts. You should
-// persist this object in your app.
-const ACTIVE_SHOPIFY_SHOPS = {};
-
-if (process.env.NODE_ENV == "development") {
-	ACTIVE_SHOPIFY_SHOPS["chienvu-store.myshopify.com"] = "access_token";
-}
-
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2022-01";
 
 app.prepare().then(async () => {
@@ -76,7 +68,6 @@ app.prepare().then(async () => {
 				// Access token and shop available in ctx.state.shopify
 				const { shop, accessToken, scope } = ctx.state.shopify;
 				const host = ctx.query.host;
-				ACTIVE_SHOPIFY_SHOPS[shop] = scope;
 
 				const shopData = await getShopData(shop);
 

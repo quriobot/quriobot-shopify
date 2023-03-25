@@ -5,35 +5,31 @@ services:
     cap_add:
       - SYS_NICE
     restart: always
+    command: --default-authentication-plugin=mysql_native_password
     environment:
       - MYSQL_DATABASE=quriobot_shopify
-      - MYSQL_ROOT_PASSWORD=CE0^wXfE9P
+      - MYSQL_ROOT_PASSWORD=quriobotmysqlpassword
     ports:
       - '3306:3306'
     volumes:
       - db:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+  redis:
+    image: 'redislabs/redismod'
+    ports:
+      - '6379:6379'
   api:
     container_name: quriobot-shopify-app
-    build:
-      context: ./
-      target: production
+    build: ./
     image: quriobot-shopify-app
     depends_on:
       - db
     ports:
-      - 8081:8081
-    environment:
-      NODE_ENV: production
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: CE0^wXfE9P
-      DB_NAME: quriobot_shopify
+      - 8087:8087
     links:
       - db
     volumes:
-      - ./:/src
+      - ./:/app
 volumes:
   db:
     driver: local

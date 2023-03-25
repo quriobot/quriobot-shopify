@@ -5,4 +5,4 @@ RUN yarn install
 COPY . /app
 RUN yarn run build
 CMD yarn start
-EXPOSE 8081
+EXPOSE 8087
