@@ -1,0 +1,36 @@
+{% assign settings = app.metafields.app_settings.general_setting %}
+
+{% assign quriobot_paths = settings.value.quriobot_path | strip | newline_to_br | strip_newlines | split: "<br />" %}
+
+{{ quriobot_paths | json }}
+
+{% assign quriobot_init = settings.value.quriobot_init %}
+
+{% assign embed_codes = settings.value.embed_codes %}
+
+{{ embed_codes | json }}
+
+{{ embed_codes.first }}
+
+<script type="text/javascript">
+  {% if quriobot_init.size %}
+    {{ quriobot_init }}
+  {% else %}
+    window.qbOptions = [
+    {% for quriobot_path in quriobot_paths %}
+      {
+        "use": "{{ quriobot_path }}",
+        "language": "{{ localization.language.iso_code }}-{{ localization.country.iso_code | downcase }}"
+      },
+      {% endfor %}
+    ];
+  {% endif %}
+</script>
+
+{% schema %}
+  {
+    "name": "Quriobot",
+    "target": "head",
+    "settings": []
+  }
+{% endschema %}
